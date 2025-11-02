@@ -2873,6 +2873,14 @@ rollback_installation() {
                 helm uninstall argocd -n argocd 2>/dev/null || true
                 kubectl delete namespace argocd 2>/dev/null || true
                 ;;
+            eso|external-secrets)
+                helm uninstall external-secrets -n external-secrets-system 2>/dev/null || true
+                kubectl delete namespace external-secrets-system 2>/dev/null || true
+                ;;
+            vault)
+                helm uninstall vault -n vault 2>/dev/null || true
+                kubectl delete namespace vault 2>/dev/null || true
+                ;;
             monitoring)
                 helm uninstall monitoring -n monitoring 2>/dev/null || true
                 kubectl delete namespace monitoring 2>/dev/null || true
@@ -3946,6 +3954,176 @@ EOF
     echo ""
 }
 
+install_eso() {
+    log_info "Installing External Secrets Operator (ESO)..."
+    
+    # Check system health first
+    check_system_health || {
+        log_warn "System resources are constrained. Continue anyway? (y/N)"
+        read -r response
+        [[ ! "$response" =~ ^[Yy]$ ]] && return 1
+    }
+    
+    # Check available memory (ESO needs ~250MB)
+    local mem_used=$(get_memory_usage_cached)
+    local mem_available=$(calc "$TOTAL_RAM_GB - $mem_used" | awk '{printf "%.2f", $1}')
+    if compare_float "$mem_available" "<" "0.3"; then
+        log_warn "Insufficient memory for ESO (needs ~250MB free)"
+        log_warn "Available: ${mem_available}GB. Continue anyway? (y/N)"
+        read -r response
+        [[ ! "$response" =~ ^[Yy]$ ]] && return 1
+    fi
+    
+    # Create namespace
+    kubectl create namespace external-secrets-system 2>/dev/null || true
+    
+    # Add Helm repo
+    log_info "Adding External Secrets Helm repository..."
+    helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
+    helm repo update
+    
+    # Create ESO values file
+    cat > "${TMP_DIR}/eso-values.yaml" <<EOF
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+webhook:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+certController:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+EOF
+    
+    # Install ESO
+    log_info "Installing External Secrets Operator via Helm (this may take 2-3 minutes)..."
+    helm upgrade --install external-secrets external-secrets/external-secrets \
+        --namespace external-secrets-system \
+        --values "${TMP_DIR}/eso-values.yaml" \
+        --wait \
+        --timeout 5m || {
+            log_error "ESO installation failed"
+            return 1
+        }
+    
+    # Wait for pods to be ready
+    log_info "Waiting for ESO pods to be ready..."
+    kubectl wait --for=condition=Ready pods --all -n external-secrets-system --timeout=180s || {
+        log_warn "Some ESO pods may still be starting"
+    }
+    
+    log_success "External Secrets Operator installed successfully!"
+    echo ""
+    log_info "ESO Access Information:"
+    echo "  Namespace: external-secrets-system"
+    echo "  Documentation: https://external-secrets.io/latest/"
+    echo ""
+    log_info "Next steps:"
+    echo "  1. Install a secret backend (Vault, AWS Secrets Manager, etc.)"
+    echo "  2. Create a SecretStore or ClusterSecretStore"
+    echo "  3. Create ExternalSecret resources"
+    echo ""
+}
+
+install_vault() {
+    log_info "Installing HashiCorp Vault (Dev Mode)..."
+    
+    # Check system health first
+    check_system_health || {
+        log_warn "System resources are constrained. Continue anyway? (y/N)"
+        read -r response
+        [[ ! "$response" =~ ^[Yy]$ ]] && return 1
+    }
+    
+    # Check available memory (Vault needs ~200MB in dev mode)
+    local mem_used=$(get_memory_usage_cached)
+    local mem_available=$(calc "$TOTAL_RAM_GB - $mem_used" | awk '{printf "%.2f", $1}')
+    if compare_float "$mem_available" "<" "0.25"; then
+        log_warn "Insufficient memory for Vault (needs ~200MB free)"
+        log_warn "Available: ${mem_available}GB. Continue anyway? (y/N)"
+        read -r response
+        [[ ! "$response" =~ ^[Yy]$ ]] && return 1
+    fi
+    
+    # Create namespace
+    kubectl create namespace vault 2>/dev/null || true
+    
+    # Add Helm repo
+    log_info "Adding HashiCorp Helm repository..."
+    helm repo add hashicorp https://helm.releases.hashicorp.com 2>/dev/null || true
+    helm repo update
+    
+    # Create Vault values file (dev mode for lab)
+    cat > "${TMP_DIR}/vault-values.yaml" <<EOF
+server:
+  dev:
+    enabled: true
+    devRootToken: "lab-root-token"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  dataStorage:
+    enabled: false  # Dev mode doesn't need persistent storage
+injector:
+  enabled: false  # Disable sidecar injector for simplicity
+ui:
+  enabled: true
+  serviceType: ClusterIP
+EOF
+    
+    # Install Vault
+    log_info "Installing Vault via Helm (this may take 2-3 minutes)..."
+    helm upgrade --install vault hashicorp/vault \
+        --namespace vault \
+        --values "${TMP_DIR}/vault-values.yaml" \
+        --wait \
+        --timeout 5m || {
+            log_error "Vault installation failed"
+            return 1
+        }
+    
+    # Wait for pods to be ready
+    log_info "Waiting for Vault pods to be ready..."
+    kubectl wait --for=condition=Ready pods --all -n vault --timeout=180s || {
+        log_warn "Some Vault pods may still be starting"
+    }
+    
+    log_success "HashiCorp Vault installed successfully!"
+    echo ""
+    log_info "Vault Access Information:"
+    echo "  Namespace: vault"
+    echo "  Service: vault"
+    echo "  Root Token: lab-root-token"
+    echo ""
+    log_info "To access Vault UI:"
+    echo "  kubectl port-forward svc/vault -n vault 8200:8200"
+    echo "  Then visit: http://localhost:8200"
+    echo ""
+    log_info "Vault is running in DEV MODE (not for production!)"
+    echo "  - Data is stored in memory only"
+    echo "  - Auto-unsealed and ready to use"
+    echo "  - Perfect for learning and labs"
+    echo ""
+}
+
 install_monitoring() {
     log_info "Installing Prometheus + Grafana Monitoring Stack..."
     
@@ -4259,6 +4437,9 @@ calculate_component_overhead() {
                 ;;
             eso|external-secrets)
                 total_mb=$((total_mb + 250))  # ESO + webhook
+                ;;
+            vault)
+                total_mb=$((total_mb + 200))  # Vault dev mode
                 ;;
             argocd)
                 total_mb=$((total_mb + 500))  # ArgoCD suite
@@ -4929,6 +5110,8 @@ show_menu() {
         echo " 13. Install Complete Environment"
         echo " 14. Install ArgoCD"
         echo " 15. Install Monitoring Stack"
+        echo " 16. Install ESO (External Secrets)"
+        echo " 17. Install Vault (Dev Mode)"
         echo ""
         echo "Advanced:"
         echo "  N. Check Network Conflicts"
@@ -5106,6 +5289,18 @@ show_menu() {
                 ;;
             15)
                 install_monitoring
+                echo ""
+                log_info "Press Enter to continue..."
+                read -r
+                ;;
+            16)
+                install_eso
+                echo ""
+                log_info "Press Enter to continue..."
+                read -r
+                ;;
+            17)
+                install_vault
                 echo ""
                 log_info "Press Enter to continue..."
                 read -r
@@ -5599,6 +5794,8 @@ guided_install() {
                 read -rp "  • Install Metrics Server? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("metrics-server")
                 read -rp "  • Install Traefik Ingress? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("traefik")
                 read -rp "  • Install ArgoCD? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("argocd")
+                read -rp "  • Install ESO (External Secrets)? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("eso")
+                read -rp "  • Install Vault (Dev Mode)? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("vault")
                 read -rp "  • Install Monitoring Stack? [Y/n]: " confirm && [[ ! "$confirm" =~ ^n ]] && components_to_install+=("monitoring")
             elif compare_float "$TOTAL_RAM_GB" ">=" "8"; then
                 log_info "Recommended for ${TOTAL_RAM_GB}GB RAM:"
@@ -5626,6 +5823,8 @@ guided_install() {
                     metrics-server) install_component "metrics-server" install_metrics_server ;;
                     traefik) install_component "traefik" install_traefik ;;
                     argocd) install_component "argocd" install_argocd ;;
+                    eso) install_component "eso" install_eso ;;
+                    vault) install_component "vault" install_vault ;;
                     monitoring) install_component "monitoring" install_monitoring ;;
                 esac
             done
@@ -5636,6 +5835,8 @@ guided_install() {
             install_component "metrics-server" install_metrics_server
             install_component "traefik" install_traefik
             install_component "argocd" install_argocd
+            install_component "eso" install_eso
+            install_component "vault" install_vault
             install_component "monitoring" install_monitoring
             ;;
         3) # Minimal
@@ -5798,9 +5999,11 @@ custom_component_selection() {
     echo "  1) Metrics Server (recommended)"
     echo "  2) Traefik Ingress Controller"
     echo "  3) ArgoCD"
-    echo "  4) Monitoring Stack (Prometheus + Grafana)"
+    echo "  4) ESO (External Secrets Operator)"
+    echo "  5) Vault (Dev Mode for labs)"
+    echo "  6) Monitoring Stack (Prometheus + Grafana)"
     echo ""
-    read -rp "Enter choices [e.g., 1 2]: " choices
+    read -rp "Enter choices [e.g., 1 2 4 5]: " choices
     
     # Install based on selections
     for choice in $choices; do
@@ -5808,7 +6011,9 @@ custom_component_selection() {
             1) install_component "metrics-server" install_metrics_server ;;
             2) install_component "traefik" install_traefik ;;
             3) install_component "argocd" install_argocd ;;
-            4) install_component "monitoring" install_monitoring ;;
+            4) install_component "eso" install_eso ;;
+            5) install_component "vault" install_vault ;;
+            6) install_component "monitoring" install_monitoring ;;
         esac
     done
 }
@@ -6651,6 +6856,18 @@ main() {
             check_docker_runtime_available
             install_argocd
             ;;
+        eso|external-secrets)
+            check_external_drive
+            check_dependencies
+            check_docker_runtime_available
+            install_eso
+            ;;
+        vault)
+            check_external_drive
+            check_dependencies
+            check_docker_runtime_available
+            install_vault
+            ;;
         monitoring)
             check_external_drive
             check_dependencies
@@ -6792,6 +7009,8 @@ main() {
             echo "  clean           - Cleanup Kubernetes resources"
             echo "  prune           - Remove unused Docker images"
             echo "  argocd          - Install ArgoCD"
+            echo "  eso             - Install External Secrets Operator"
+            echo "  vault           - Install Vault (dev mode)"
             echo "  monitoring      - Install monitoring stack"
             echo ""
             echo "═══════════════════════════════════════════════════════════"
