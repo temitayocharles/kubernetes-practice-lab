@@ -1,0 +1,17 @@
+# ClusterIP Service (Default - Internal Only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterip-service
+  labels:
+    app: web
+    type: internal
+spec:
+  type: ClusterIP  # Default type
+  selector:
+    app: web
+  ports:
+  - name: http
+    port: 80        # Service port
+    targetPort: 80  # Container port
+    protocol: TCP

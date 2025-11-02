@@ -1,0 +1,117 @@
+# INSECURE Deployment - demonstrates security anti-patterns
+# ⚠️ DO NOT USE IN PRODUCTION - FOR LEARNING ONLY
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insecure-app
+  template:
+    metadata:
+      labels:
+        app: insecure-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest  # ❌ Using :latest tag (not immutable)
+        securityContext:
+          privileged: true   # ❌ Privileged mode (can access host)
+          runAsUser: 0       # ❌ Running as root
+        # ❌ No resource limits (can consume all node resources)
+        # ❌ No readOnlyRootFilesystem
+        # ❌ No capabilities drop
+        env:
+        - name: DB_PASSWORD
+          value: "hardcoded-password-123"  # ❌ Hardcoded secret
+---
+# SECURE Deployment - demonstrates security best practices
+# ✅ USE THIS PATTERN IN PRODUCTION
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-app-best-practice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secure-app-best-practice
+  template:
+    metadata:
+      labels:
+        app: secure-app-best-practice
+    spec:
+      serviceAccountName: secure-app-sa  # ✅ Custom ServiceAccount (not default)
+      automountServiceAccountToken: false  # ✅ Disable if not needed
+      securityContext:
+        runAsNonRoot: true              # ✅ Never run as root
+        runAsUser: 1000                 # ✅ Non-root UID
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault          # ✅ Enable seccomp
+      containers:
+      - name: app
+        image: nginx:1.25.3-alpine      # ✅ Specific immutable tag
+        securityContext:
+          allowPrivilegeEscalation: false  # ✅ No privilege escalation
+          readOnlyRootFilesystem: true     # ✅ Read-only root filesystem
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL                        # ✅ Drop all capabilities
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi               # ✅ Resource limits prevent noisy neighbor
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:               # ✅ Secret from SecretKeyRef (not hardcoded)
+              name: app-secrets
+              key: db-password
+        livenessProbe:                  # ✅ Health checks
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+---
+# ServiceAccount for secure app
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: secure-app-sa
+automountServiceAccountToken: false  # ✅ Explicitly disable if not using K8s API
+---
+# Secret (use kubectl create secret in practice, not in YAML!)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+stringData:
+  db-password: "changeme"  # ⚠️ In practice: kubectl create secret generic app-secrets --from-literal=db-password=<value>

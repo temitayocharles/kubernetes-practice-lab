@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: site-config
+  labels:
+    app: bio-site
+data:
+  SITE_TITLE: "My Portfolio Site"
+  THEME: "dark"
+  VERSION: "2.0"
+  FOOTER_TEXT: "Built with ❤️  and Kubernetes"
+  MAX_CONNECTIONS: "100"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: site-secret
+  labels:
+    app: bio-site
+type: Opaque
+stringData:
+  CONTACT_EMAIL: "yourname@example.com"
+  API_KEY: "demo-key-12345-abcdef"
+  DB_PASSWORD: "super-secret-password"

@@ -1,0 +1,59 @@
+# THIS IS THE FIX for the metrics-server 403 Forbidden issue!
+# The problem: metrics-server couldn't access node metrics
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-server
+  namespace: kube-system
+---
+# ClusterRole with ALL required permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:metrics-server
+rules:
+- apiGroups: [""]
+  resources:
+  - pods
+  - nodes
+  - nodes/stats    # Basic node stats
+  - nodes/metrics  # ⚠️ THIS WAS MISSING! Needed for kubelet metrics endpoint
+  - nodes/proxy    # ⚠️ THIS WAS MISSING! Needed for proxying to kubelet
+  - namespaces
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - "metrics.k8s.io"
+  resources:
+  - pods
+  - nodes
+  verbs: ["get", "list"]
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+# APIService registration
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io
+spec:
+  service:
+    name: metrics-server
+    namespace: kube-system
+  group: metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: true
+  groupPriorityMinimum: 100
+  versionPriority: 100

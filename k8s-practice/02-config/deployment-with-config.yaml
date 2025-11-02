@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bio-web
+  labels:
+    app: bio-site
+    tier: frontend
+    version: v2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bio-site
+  template:
+    metadata:
+      labels:
+        app: bio-site
+        tier: frontend
+        version: v2
+    spec:
+      containers:
+      - name: bio-container
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        # Inject ALL environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: site-config
+        # Inject ALL environment variables from Secret
+        - secretRef:
+            name: site-secret
+        # You can also inject individual variables:
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP

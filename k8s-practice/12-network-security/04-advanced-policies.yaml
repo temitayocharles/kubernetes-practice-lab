@@ -1,0 +1,79 @@
+# NetworkPolicy: Allow only specific namespace to access pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-trusted-namespace
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      security: high
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trusted-namespace
+---
+# NetworkPolicy: Deny access to metadata server (AWS/GCP/Azure)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-metadata-server
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 169.254.169.254/32  # AWS/Azure metadata
+        - 169.254.169.253/32  # GCP metadata (link-local)
+---
+# NetworkPolicy: Allow egress to specific external IPs only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-specific-ips
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: external-api-client
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 203.0.113.0/24  # Example: Allow only this IP range
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:  # Allow DNS
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# NetworkPolicy: Allow ingress from specific CIDR range
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-office-network
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      access: internal-only
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 10.0.0.0/8  # Example: Corporate network range
+    ports:
+    - protocol: TCP
+      port: 8080

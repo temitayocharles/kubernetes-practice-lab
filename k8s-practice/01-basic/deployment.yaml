@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bio-web
+  labels:
+    app: bio-site
+    tier: frontend
+    version: v2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bio-site
+  template:
+    metadata:
+      labels:
+        app: bio-site
+        tier: frontend
+        version: v2
+    spec:
+      containers:
+      - name: bio-container
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP

@@ -1,0 +1,31 @@
+# Kubernetes config
+kubeconfig*
+*.kubeconfig
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# Cluster state (if using local tools)
+.k3d/
+.minikube/
+.kind/
+
+# Backup files
+*.backup
+*.bak
+*.old

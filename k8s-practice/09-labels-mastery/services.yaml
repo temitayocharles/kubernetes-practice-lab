@@ -1,0 +1,102 @@
+# Services with different selector strategies
+---
+# Service 1: Routes to v1 only
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-v1-service
+  labels:
+    app: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    tier: frontend
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# Service 2: Routes to v2 only
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-v2-service
+  labels:
+    app: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    tier: frontend
+    version: v2
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# Service 3: Routes to ALL frontend versions (load balance across v1 and v2)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  labels:
+    app: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    tier: frontend  # Only tier, not version - selects ALL frontend pods!
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# Service 4: API service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  labels:
+    app: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    tier: api
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# Service 5: Database service
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-service
+  labels:
+    app: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    tier: database
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+# Service 6: Production-only service (complex selector via annotations)
+apiVersion: v1
+kind: Service
+metadata:
+  name: production-service
+  labels:
+    app: ecommerce
+  annotations:
+    description: "Routes only to production environment pods"
+spec:
+  type: ClusterIP
+  selector:
+    environment: production
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http

@@ -1,0 +1,24 @@
+# NetworkPolicy: Default deny all ingress traffic
+# Apply this first to implement zero-trust networking
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all-ingress
+  namespace: default
+spec:
+  podSelector: {}  # Applies to ALL pods in namespace
+  policyTypes:
+  - Ingress
+  # No ingress rules = deny all
+---
+# NetworkPolicy: Default deny all egress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all-egress
+  namespace: default
+spec:
+  podSelector: {}  # Applies to ALL pods in namespace
+  policyTypes:
+  - Egress
+  # No egress rules = deny all

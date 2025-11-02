@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bio-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bio-site
+  template:
+    metadata:
+      labels:
+        app: bio-site
+    spec:
+      containers:
+      - name: bio-container
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 80
+        # Resource requests (scheduler uses these)
+        # Resource limits (enforced by kubelet)
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        # Liveness probe: Restart if failing
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        # Readiness probe: Remove from service if failing
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+          timeoutSeconds: 2
+          failureThreshold: 2
+        # Startup probe: For slow-starting apps
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 30  # 30 * 5 = 150s max startup time

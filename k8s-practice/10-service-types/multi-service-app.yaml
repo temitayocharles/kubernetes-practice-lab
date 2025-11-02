@@ -1,0 +1,142 @@
+# Multi-Service Application with Mixed Service Types
+---
+# Frontend - LoadBalancer (public-facing)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: LoadBalancer
+  selector:
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# API - NodePort (for admin/ops access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  type: NodePort
+  selector:
+    tier: api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30880
+---
+# Database - ClusterIP (internal only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+spec:
+  type: ClusterIP
+  selector:
+    tier: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# Cache - ClusterIP (internal only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache
+spec:
+  type: ClusterIP
+  selector:
+    tier: cache
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+# Deployments for each tier
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        tier: frontend
+        app: myapp
+    spec:
+      containers:
+      - name: frontend
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      tier: api
+  template:
+    metadata:
+      labels:
+        tier: api
+        app: myapp
+    spec:
+      containers:
+      - name: api
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: database
+  template:
+    metadata:
+      labels:
+        tier: database
+        app: myapp
+    spec:
+      containers:
+      - name: database
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: cache
+  template:
+    metadata:
+      labels:
+        tier: cache
+        app: myapp
+    spec:
+      containers:
+      - name: cache
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 6379

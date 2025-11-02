@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bio-web-service-broken
+  labels:
+    app: bio-site
+spec:
+  type: ClusterIP
+  selector:
+    app: wrong-label  # ❌ INTENTIONALLY BROKEN - doesn't match pods!
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    name: http

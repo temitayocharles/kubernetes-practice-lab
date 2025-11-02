@@ -1,0 +1,23 @@
+# LoadBalancer Service (Cloud-Like External Access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadbalancer-service
+  labels:
+    app: web
+    type: external-prod
+  annotations:
+    # k3s servicelb specific (optional)
+    # Assigns ports from host for external access
+    service.kubernetes.io/topology-aware-hints: auto
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+  - name: http
+    port: 80        # External LB port
+    targetPort: 80  # Container port
+    protocol: TCP
+  # Optional: Request specific external IP (cloud-specific)
+  # loadBalancerIP: 192.168.1.100

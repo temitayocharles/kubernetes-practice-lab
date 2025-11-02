@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bio-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bio-site
+  template:
+    metadata:
+      labels:
+        app: bio-site
+        version: v1
+    spec:
+      # Init container runs before main container
+      initContainers:
+      - name: init-setup
+        image: busybox
+        command: ['sh', '-c', 'echo "Initializing..." && sleep 5']
+      
+      containers:
+      - name: bio-container
+        image: temitayocharles/hello-k8s:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      # Sidecar container (runs alongside main container)
+      - name: log-sidecar
+        image: busybox
+        command: ['sh', '-c', 'while true; do echo "Logging..."; sleep 30; done']
+      
+      # Pod anti-affinity: Spread pods across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - bio-site
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bio-web-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bio-web
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bio-web-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: bio-site
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          access: allowed
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53  # DNS
