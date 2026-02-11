@@ -1,6 +1,14 @@
 # Kubernetes Practice Lab & Local Cluster Setup
 
+
+## Start Here
+- Read [START_HERE.md](START_HERE.md) for the chronological playbook.
+
 A comprehensive hands-on Kubernetes learning environment with 12 guided practice phases, from basic deployments to advanced RBAC and network security. Includes an automated local cluster setup script for k3d.
+
+
+## Documentation Index
+- [QUICKSTART.md](QUICKSTART.md)
 
 ## 🎯 What's Inside
 
